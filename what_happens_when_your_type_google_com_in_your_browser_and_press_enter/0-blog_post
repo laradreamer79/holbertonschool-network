@@ -1,0 +1,161 @@
+Published URL: TODO - replace this line with your Medium or LinkedIn article URL after publishing.
+
+# What Happens When You Type https://www.google.com and Press Enter?
+
+Typing a URL into a browser looks simple, but it activates several layers of the web stack. The browser, operating system, DNS infrastructure, network protocols, security systems, load balancers, servers, application code, and databases all work together to return the page.
+
+This article follows the request path at a practical systems level, from URL parsing and DNS resolution to encrypted transport, backend processing, and browser rendering.
+
+![Flow diagram of the request path from browser to backend systems](Flow_Diagram.png)
+
+## 1. The Browser Parses the URL
+
+When you enter:
+
+```text
+https://www.google.com
+```
+
+the browser breaks it into parts:
+
+- `https` is the scheme, meaning the browser should use HTTP over TLS encryption.
+- `www.google.com` is the hostname.
+- Because no path is provided, the browser assumes `/`.
+- Because the scheme is HTTPS, the default port is `443`.
+
+Before touching the network, the browser may check local state. It can look at its cache, HSTS rules, cookies, service workers, and previous DNS results. For a major site like Google, some data may already be cached, but let us assume the browser needs to contact the network from scratch.
+
+## 2. DNS Request: Finding the IP Address
+
+Computers route traffic using IP addresses, not human-friendly names. The browser needs to translate `www.google.com` into an IP address. This process is called DNS resolution.
+
+The lookup may happen in several layers:
+
+- Browser DNS cache
+- Operating system DNS cache
+- Router or local network resolver
+- ISP resolver or public resolver such as Google Public DNS or Cloudflare DNS
+
+If none of those layers already knows the answer, the resolver performs a recursive DNS lookup. It asks DNS servers in a hierarchy:
+
+1. A root DNS server points to the `.com` top-level domain servers.
+2. A `.com` DNS server points to Google’s authoritative DNS servers.
+3. Google’s authoritative DNS server returns one or more IP addresses for `www.google.com`.
+
+The response may include multiple IP addresses because large services are distributed across many data centers. DNS can also help send users to a nearby or healthy endpoint. The result is cached for a limited time based on the DNS record’s TTL.
+
+## 3. TCP/IP: Creating a Reliable Connection
+
+Now that the browser has an IP address, it needs to communicate with that destination. This happens through the TCP/IP networking stack.
+
+IP is responsible for addressing and routing packets across networks. The browser’s request is broken into packets that travel from your device, through your router, across your ISP, and eventually through the internet toward Google’s infrastructure.
+
+TCP provides a reliable connection on top of IP. Before sending HTTP data, the browser and server complete the TCP three-way handshake:
+
+1. The client sends a `SYN` packet to the server.
+2. The server replies with `SYN-ACK`.
+3. The client replies with `ACK`.
+
+After this, both sides have agreed to establish a connection. TCP handles ordering, retransmission of lost packets, flow control, and congestion control. This is why web applications can rely on receiving a complete ordered byte stream instead of manually managing every packet.
+
+Modern browsers may also use HTTP/3 over QUIC instead of TCP for some connections. QUIC runs over UDP and includes its own reliability and encryption features. TCP remains fundamental to understanding how traditional HTTP connections work across the web.
+
+## 4. Firewall Checks Along the Path
+
+Before the connection succeeds, traffic may pass through several firewalls.
+
+Your own computer may have a local firewall that controls outbound and inbound traffic. Your home or office router may apply network address translation and filtering rules. Corporate networks may inspect or block requests based on policy. Cloud providers and Google’s edge network also use firewalls to protect infrastructure.
+
+For an HTTPS request, firewalls commonly allow outbound traffic to TCP port `443`. They may block suspicious destinations, rate-limit traffic, reject malformed packets, or enforce security rules. At Google’s side, firewall systems help prevent unwanted traffic from reaching internal services directly.
+
+## 5. HTTPS/SSL: Encrypting the Connection
+
+Because the URL uses `https`, the browser does not send the HTTP request in plain text. After the TCP connection is established, the browser starts a TLS handshake. TLS is the modern protocol that people often still refer to as SSL.
+
+During the TLS handshake:
+
+- The browser and server agree on supported TLS versions and cipher suites.
+- The server sends a digital certificate proving it is authorized to represent `www.google.com`.
+- The browser validates the certificate chain against trusted certificate authorities.
+- The browser checks that the certificate matches the hostname and has not expired.
+- The client and server securely derive shared encryption keys.
+
+Once the handshake completes, the connection is encrypted. This protects the confidentiality and integrity of the data. Anyone watching the network can see that your device is connecting to an IP address, but they cannot read the contents of the HTTPS request or response.
+
+## 6. Load Balancer: Choosing a Backend
+
+Google receives an enormous amount of traffic, so one machine cannot handle all requests. The connection usually reaches an edge location close to the user. From there, load balancers distribute traffic across many servers.
+
+A load balancer may make decisions based on:
+
+- Server health
+- Current load
+- Geographic location
+- Network latency
+- Data center availability
+- Type of request
+
+Load balancers improve reliability and performance. If one server fails, the load balancer can stop sending traffic to it. If traffic increases, more servers can be added behind the load balancer.
+
+At a company like Google, load balancing is not just a single device. It is a global system involving DNS, edge routing, reverse proxies, software load balancers, and internal service discovery.
+
+## 7. Web Server: Handling the HTTP Request
+
+After TLS is established and traffic is routed through a load balancer, the browser sends an HTTP request. It may look conceptually like this:
+
+```http
+GET / HTTP/1.1
+Host: www.google.com
+User-Agent: ...
+Accept: text/html,...
+Cookie: ...
+```
+
+The web server receives the request and handles web-level concerns. It may terminate TLS, apply compression, serve static assets, enforce redirects, manage caching headers, and route dynamic requests to application services.
+
+For a simple static site, the web server might directly return an HTML file. For Google Search, the response is dynamic and personalized, so the request continues deeper into the system.
+
+## 8. Application Server: Generating the Page
+
+The application server contains the business logic. It decides what content should be returned for the request.
+
+For `https://www.google.com`, the application layer may consider:
+
+- User location
+- Language preferences
+- Cookies and session information
+- Device type
+- Experiment or feature flags
+- Security and abuse signals
+
+The application server builds the response that becomes the Google homepage. It may call many internal services to decide which scripts, styles, logos, account controls, and search features to include.
+
+Large systems are usually not one giant application. They are often composed of many services communicating with each other over internal APIs. Each service handles a specific responsibility.
+
+## 9. Database: Reading and Writing Data
+
+The database layer stores persistent information used by the application. Depending on the request and the user’s state, the application may read or write data.
+
+For Google’s homepage, database interactions might involve account preferences, localization settings, security information, or experiment configuration. If the user is signed in, the application may retrieve data related to that account. If the user performs a search, the system will use massive indexes and storage systems to find relevant results.
+
+In large-scale systems, “database” does not necessarily mean a single SQL server. It can include distributed databases, caches, search indexes, object storage, logs, and replicated data systems. Caches are especially important because they reduce database load and improve response time.
+
+## 10. The Response Returns to the Browser
+
+Once the server-side systems produce a response, it travels back through the same general path:
+
+- Application server generates content.
+- Web server formats and sends the HTTP response.
+- Load balancer routes the response back to the client.
+- Encrypted TLS records travel over TCP/IP packets.
+- The browser receives, decrypts, and processes the response.
+
+The response usually includes HTML first. The browser parses the HTML and discovers additional resources such as CSS files, JavaScript files, images, fonts, and icons. It sends more requests for those assets, often reusing existing secure connections.
+
+The browser then builds the DOM from HTML, builds the CSSOM from stylesheets, runs JavaScript, creates a render tree, computes layout, paints pixels, and composites layers onto the screen. That is the front-end rendering part of the story: the final step where network data becomes something the user can see and interact with.
+
+## Conclusion
+
+Typing `https://www.google.com` and pressing Enter feels instant, but it triggers a complex chain of events. DNS finds the destination IP address. TCP/IP creates reliable network communication. Firewalls inspect and filter traffic. HTTPS/TLS encrypts the connection and verifies identity. Load balancers distribute the request to healthy infrastructure. Web servers receive and route HTTP traffic. Application servers generate dynamic content. Databases and caches provide the data needed to build the response.
+
+The magic of the web is that all of these layers work together quickly enough that we often forget they exist. Understanding them is valuable because every web application, from a small personal site to a global platform, depends on the same fundamental ideas.
